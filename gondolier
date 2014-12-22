@@ -1,0 +1,46 @@
+#!/usr/bin/env ruby
+
+require 'fileutils'
+require 'net/http'
+require 'optparse'
+require 'uri'
+require 'yaml'
+
+def get_all_keys(users)
+	result = ""
+	users.each do |user|
+		uri = URI.parse("https://github.com/#{user}.keys")
+		response = Net::HTTP.get_response(uri)
+		banner = "#" * 40
+		placard = "# #{user}"
+		result += [banner, placard, banner, response.body, "\n"].join("\n")
+	end
+	result
+end
+
+options = {}
+options[:debug] = false
+
+option_parser = OptionParser.new do |opts|
+	opts.banner = "Usage: gondolier github_user1 github_user2 github_user3"
+	opts.on("-d", "--debug", "Output to stdout") do
+		options[:debug] = true
+	end
+end
+
+users = option_parser.parse! ARGV
+config = YAML.load_file('.admins.yml')
+all_users = config['admins'] + users
+keys = get_all_keys all_users
+epoch = Time.now.to_i
+auth_keys_file = File.expand_path "~/.ssh/authorized_keys"
+backup_file = File.expand_path "~/.ssh/authorized_keys_#{epoch}"
+
+if options[:debug]
+	puts keys 
+else
+	if File.exists? auth_keys_file
+		FileUtils.mv auth_keys_file, backup_file
+	end
+	File.open(auth_keys_file, 'w') { |file| file.write keys }
+end
